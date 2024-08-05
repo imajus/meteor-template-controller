@@ -1,26 +1,16 @@
 Package.describe({
   summary: 'Syntactic sugar for blaze templates',
-  name: 'space:template-controller',
-  version: '0.3.0',
-  git: 'https://github.com/meteor-space/template-controller.git'
+  name: 'imajus:template-controller',
+  version: '0.0.1',
+  git: 'https://github.com/imajus/meteor-template-controller'
 });
 
 Package.onUse(function(api) {
-
-  // Have to stay on Meteor 1.2.1 to be compatible with all Meteor versions.
-  api.versionsFrom('1.2.1');
-
+  api.versionsFrom(['2.0', '3.0']);
   api.use([
     'ecmascript',
     'reactive-var',
-    'templating',
-    'blaze-html-templates'
+    'templating@1.3.4||1.4.4',
   ]);
-
-  api.addFiles([
-    'source/template-controller.js'
-  ], 'client');
-
-  api.export('TemplateController');
-
+  api.mainModule('index.js', 'client');
 });

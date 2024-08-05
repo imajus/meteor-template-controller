@@ -1,5 +1,13 @@
+import { Template } from 'meteor/templating';
+
 const DEFAULT_API = [
-  'state', 'props', 'helpers', 'events', 'onCreated', 'onRendered', 'onDestroyed'
+  'state',
+  'props',
+  'helpers',
+  'events',
+  'onCreated',
+  'onRendered',
+  'onDestroyed',
 ];
 
 class ReactiveObject {
@@ -9,8 +17,12 @@ class ReactiveObject {
   addProperty(key, defaultValue = null) {
     const property = new ReactiveVar(defaultValue);
     Object.defineProperty(this, key, {
-      get: () => { return property.get(); },
-      set: (value) => { property.set(value); }
+      get: () => {
+        return property.get();
+      },
+      set: (value) => {
+        property.set(value);
+      },
     });
   }
   addProperties(properties = {}) {
@@ -21,13 +33,13 @@ class ReactiveObject {
 }
 
 // Helpers
-const bindToTemplateInstance = function(handler) {
-  return function() {
+const bindToTemplateInstance = function (handler) {
+  return function () {
     return handler.apply(Template.instance(), arguments);
   };
 };
 
-const bindAllToTemplateInstance = function(handlers) {
+const bindAllToTemplateInstance = function (handlers) {
   for (let key of Object.keys(handlers)) {
     handlers[key] = bindToTemplateInstance(handlers[key]);
   }
@@ -35,13 +47,13 @@ const bindAllToTemplateInstance = function(handlers) {
 };
 
 // Errors
-const templateNotFoundError = function(templateName) {
+const templateNotFoundError = function (templateName) {
   let error = new Error(`No template <${templateName}> found.`);
   error.name = 'TemplateNotFoundError';
   return error;
 };
 
-const propertyValidatorRequired = function() {
+const propertyValidatorRequired = function () {
   let error = new Error(
     '<data> must be a validator with #clean and #validate methods (see: SimpleSchema)'
   );
@@ -49,16 +61,16 @@ const propertyValidatorRequired = function() {
   return error;
 };
 
-const propertyValidationError = function(error, templateName) {
+const propertyValidationError = function (error, templateName) {
   error.name = 'PropertyValidationError';
   error.message = `in <${templateName}> ` + error.message;
   return error;
 };
 
-const rootElementRequired = function() {
+const rootElementRequired = function () {
   let error = new Error(
     'Please define a single root DOM element for your template.\n' +
-    'Learn more about this issue: https://github.com/meteor-space/template-controller/issues/6'
+      'Learn more about this issue: https://github.com/meteor-space/template-controller/issues/6'
   );
   error.name = 'RootElementRequired';
   return error;
@@ -67,22 +79,21 @@ const rootElementRequired = function() {
 let propsCleanConfiguration = {};
 
 // We have to make it a global to support Meteor 1.2.x
-TemplateController = function(templateName, config) {
+export const TemplateController = function (templateName, config) {
   // Template reference
   let template = Template[templateName];
   if (!template) {
     throw templateNotFoundError(templateName);
   }
-  let { state, props, helpers, events, onCreated, onRendered, onDestroyed } = config;
-
+  let { state, props, helpers, events, onCreated, onRendered, onDestroyed } =
+    config;
   // Remove all standard api props fromt he config so we can have add the
   // rest to the template instance!
   for (apiProp of DEFAULT_API) {
     delete config[apiProp];
   }
-
   // State & private instance methods
-  template.onCreated(function() {
+  template.onCreated(function () {
     this.state = new ReactiveObject(state);
     // Private
     if (config.private) {
@@ -96,7 +107,6 @@ TemplateController = function(templateName, config) {
       if (this.firstNode !== this.lastNode) throw rootElementRequired();
       this.$(this.firstNode).trigger(eventName, data);
     };
-
     // Setup validated reactive props passed from the outside
     this.props = new ReactiveObject();
     if (props) {
@@ -120,24 +130,23 @@ TemplateController = function(templateName, config) {
       });
     }
   });
-
-
   // Helpers
   if (!helpers) helpers = {};
-  helpers.state = function() { return this.state; };
-  helpers.props = function() { return this.props; };
+  helpers.state = function () {
+    return this.state;
+  };
+  helpers.props = function () {
+    return this.props;
+  };
   template.helpers(bindAllToTemplateInstance(helpers));
-
   // Events
   if (events) {
     template.events(bindAllToTemplateInstance(events));
   }
-
   // Lifecycle
   if (onCreated) template.onCreated(onCreated);
   if (onRendered) template.onRendered(onRendered);
   if (onDestroyed) template.onDestroyed(onDestroyed);
-
 };
 
 TemplateController.setPropsCleanConfiguration = (config) => {

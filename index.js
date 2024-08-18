@@ -1,15 +1,5 @@
 import { Template } from 'meteor/templating';
 
-const DEFAULT_API = [
-  'state',
-  'props',
-  'helpers',
-  'events',
-  'onCreated',
-  'onRendered',
-  'onDestroyed',
-];
-
 class ReactiveObject {
   constructor(properties = {}) {
     this.addProperties(properties);
@@ -54,16 +44,16 @@ const templateNotFoundError = function (templateName) {
 };
 
 const propertyValidatorRequired = function () {
-  let error = new Error(
+  const error = new Error(
     '<data> must be a validator with #clean and #validate methods (see: SimpleSchema)'
   );
   error.name = 'PropertyValidatorRequired';
   return error;
 };
 
-const propertyValidationError = function (error, templateName) {
+const propertyValidationError = function (err, templateName) {
+  const error = new Error(`in <${templateName}> ${err.message}`)
   error.name = 'PropertyValidationError';
-  error.message = `in <${templateName}> ` + error.message;
   return error;
 };
 
@@ -76,51 +66,67 @@ const rootElementRequired = function () {
   return error;
 };
 
-let propsCleanConfiguration = {};
+const propsCleanConfiguration = {};
 
 // We have to make it a global to support Meteor 1.2.x
-export const TemplateController = function (templateName, config) {
+export const TemplateController = function (
+  templateName,
+  {
+    state,
+    props,
+    helpers,
+    events,
+    onCreated,
+    onRendered,
+    onDestroyed,
+    ...config
+  }
+) {
   // Template reference
-  let template = Template[templateName];
+  const template = Template[templateName];
   if (!template) {
     throw templateNotFoundError(templateName);
   }
-  let { state, props, helpers, events, onCreated, onRendered, onDestroyed } =
-    config;
-  // Remove all standard api props fromt he config so we can have add the
-  // rest to the template instance!
-  for (apiProp of DEFAULT_API) {
-    delete config[apiProp];
-  }
   // State & private instance methods
   template.onCreated(function () {
+    this.props = new ReactiveObject();
     this.state = new ReactiveObject(state);
-    // Private
-    if (config.private) {
-      for (let key of Object.keys(config.private)) {
-        this[key] = config.private[key];
-      }
-    }
+    // Private methods
+    Object.assign(this, config.private);
     // Add sugar method for triggering custom jQuery events on the root node
-    this.triggerEvent = (eventName, data) => {
+    this.triggerEvent = function (eventName, data) {
       // Force best practice of having a single root element for components!
       if (this.firstNode !== this.lastNode) throw rootElementRequired();
       this.$(this.firstNode).trigger(eventName, data);
     };
     // Setup validated reactive props passed from the outside
-    this.props = new ReactiveObject();
     if (props) {
       this.autorun(() => {
-        if (!props.validate) throw propertyValidatorRequired();
-        let currentData = Template.currentData() || {};
-        props.clean(currentData, propsCleanConfiguration);
-        try {
-          props.validate(currentData);
-        } catch (error) {
-          throw propertyValidationError(error, this.view.name);
+        let data = Template.currentData() || {};
+        if ('clean' in props && 'validate' in props) {
+          // SimpleSchema API
+          data = props.clean(data, {
+            ...propsCleanConfiguration,
+            mutate: false,
+          });
+          try {
+            props.validate(data);
+          } catch (err) {
+            throw propertyValidationError(err, this.view.name);
+          }
+        } else if ('parse' in props) {
+          // Zod API
+          try {
+            data = props.parse(data);
+          } catch (err) {
+            throw propertyValidationError(err, this.view.name);
+          }
+        } else {
+          throw propertyValidatorRequired();
         }
-        for (let key of Object.keys(currentData)) {
-          let value = currentData[key];
+        // Append/update properties
+        for (const key of Object.keys(data)) {
+          const value = data[key];
           if (!this.props.hasOwnProperty(key)) {
             this.props.addProperty(key, value);
           } else {
@@ -131,14 +137,17 @@ export const TemplateController = function (templateName, config) {
     }
   });
   // Helpers
-  if (!helpers) helpers = {};
-  helpers.state = function () {
-    return this.state;
-  };
-  helpers.props = function () {
-    return this.props;
-  };
-  template.helpers(bindAllToTemplateInstance(helpers));
+  template.helpers(
+    bindAllToTemplateInstance({
+      ...helpers,
+      state() {
+        return this.state;
+      },
+      props() {
+        return this.props;
+      },
+    })
+  );
   // Events
   if (events) {
     template.events(bindAllToTemplateInstance(events));

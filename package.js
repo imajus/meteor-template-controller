@@ -1,7 +1,7 @@
 Package.describe({
   summary: 'Syntactic sugar for blaze templates',
   name: 'imajus:template-controller',
-  version: '0.0.1',
+  version: '0.1.0',
   git: 'https://github.com/imajus/meteor-template-controller'
 });
 
